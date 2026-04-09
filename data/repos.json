@@ -1,9 +1,90 @@
 [
-  { "owner": "backend-br", "repo": "vagas" },
-  { "owner": "frontendbr", "repo": "vagas" },
-  { "owner": "CollabCodeTech", "repo": "vagas" },
-  { "owner": "remoteintech", "repo": "remote-jobs" },
-  { "owner": "jessicard", "repo": "remote-jobs" },
-  { "owner": "vuejs-br", "repo": "vagas" },
-  { "owner": "golang-cafe", "repo": "jobs" }
+  {
+    "owner": "backend-br",
+    "repo": "vagas"
+  },
+  {
+    "owner": "frontendbr",
+    "repo": "vagas"
+  },
+  {
+    "owner": "CollabCodeTech",
+    "repo": "vagas"
+  },
+  {
+    "owner": "remoteintech",
+    "repo": "remote-jobs"
+  },
+  {
+    "owner": "jessicard",
+    "repo": "remote-jobs"
+  },
+  {
+    "owner": "vuejs-br",
+    "repo": "vagas"
+  },
+  {
+    "owner": "golang-cafe",
+    "repo": "jobs"
+  },
+  {
+    "owner": "react-brasil",
+    "repo": "vagas"
+  },
+  {
+    "owner": "androiddevbr",
+    "repo": "vagas"
+  },
+  {
+    "owner": "CocoaHeadsBrasil",
+    "repo": "vagas"
+  },
+  {
+    "owner": "flutterbr",
+    "repo": "vagas"
+  },
+  {
+    "owner": "phpdevbr",
+    "repo": "vagas"
+  },
+  {
+    "owner": "brasil-php",
+    "repo": "vagas"
+  },
+  {
+    "owner": "dotnetdevbr",
+    "repo": "vagas"
+  },
+  {
+    "owner": "kotlin-br",
+    "repo": "vagas"
+  },
+  {
+    "owner": "rustdevbr",
+    "repo": "vagas"
+  },
+  {
+    "owner": "rubydevbr",
+    "repo": "vagas"
+  },
+  {
+    "owner": "Gommunity",
+    "repo": "vagas"
+  },
+  {
+    "owner": "clj-br",
+    "repo": "vagas"
+  },
+  {
+    "owner": "DevOps-Brasil",
+    "repo": "Vagas"
+  },
+  {
+    "owner": "qa-brasil",
+    "repo": "vagas"
+  },
+  {
+    "owner": "remotejobsbr",
+    "repo": "jobs"
+  }
 ]

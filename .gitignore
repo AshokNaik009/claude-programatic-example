@@ -29,7 +29,7 @@ pids/
 *.pid.lock
 
 # Data files (local job storage)
-data/jobs.json
+data/
 
 # OS
 .DS_Store

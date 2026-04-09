@@ -1,6 +1,8 @@
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { loadRepos, saveRepos } from "./storage.js";
 import type { Repo } from "./types.js";
+
+const CLAUDE_BIN = "/Users/ashoknaik/.nvm/versions/node/v22.1.0/bin/claude";
 
 const CLAUDE_PROMPT =
   'Search GitHub for repositories where companies post job openings as GitHub Issues, similar to backend-br/vagas. Return only a JSON array of owner/repo strings.';
@@ -40,10 +42,15 @@ function extractArray(parsed: any): string[] {
 
 export function discoverRepos(): Promise<{ added: string[]; total: number }> {
   return new Promise((resolve, reject) => {
-    const cmd = `claude --allowedTools WebSearch --output-format json -p ${JSON.stringify(CLAUDE_PROMPT)}`;
-    exec(
-      cmd,
-      { timeout: 180_000, env: { ...process.env, NODE_OPTIONS: "" } },
+    const args = [
+      "--allowedTools", "WebSearch",
+      "--output-format", "json",
+      "-p", CLAUDE_PROMPT,
+    ];
+    execFile(
+      CLAUDE_BIN,
+      args,
+      { timeout: 180_000, env: { ...process.env, NODE_OPTIONS: "" }, maxBuffer: 10 * 1024 * 1024 },
       (error, stdout, stderr) => {
         // Claude CLI may exit non-zero but still produce valid output
         if (error && !stdout.trim()) {
