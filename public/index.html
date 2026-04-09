@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitHub Jobs Aggregator</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d1117; color: #c9d1d9; min-height: 100vh; }
+
+    header { background: #161b22; border-bottom: 1px solid #30363d; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+    header h1 { font-size: 20px; color: #f0f6fc; }
+    header h1 span { color: #58a6ff; }
+
+    .actions { display: flex; gap: 8px; }
+    .btn { padding: 8px 16px; border: 1px solid #30363d; border-radius: 6px; background: #21262d; color: #c9d1d9; cursor: pointer; font-size: 13px; transition: 0.15s; }
+    .btn:hover { background: #30363d; border-color: #8b949e; }
+    .btn.primary { background: #238636; border-color: #238636; color: #fff; }
+    .btn.primary:hover { background: #2ea043; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 24px; }
+
+    .tabs { display: flex; gap: 0; border-bottom: 1px solid #30363d; margin-bottom: 20px; }
+    .tab { padding: 10px 20px; cursor: pointer; color: #8b949e; border-bottom: 2px solid transparent; font-size: 14px; transition: 0.15s; }
+    .tab:hover { color: #c9d1d9; }
+    .tab.active { color: #f0f6fc; border-bottom-color: #f78166; }
+
+    .status-bar { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #8b949e; display: none; }
+    .status-bar.visible { display: block; }
+    .status-bar.success { border-color: #238636; color: #3fb950; }
+    .status-bar.error { border-color: #da3633; color: #f85149; }
+
+    .date-group { margin-bottom: 24px; }
+    .date-header { font-size: 14px; color: #8b949e; padding: 8px 0; border-bottom: 1px solid #21262d; margin-bottom: 8px; }
+    .date-header .count { background: #30363d; padding: 2px 8px; border-radius: 10px; font-size: 12px; margin-left: 8px; }
+
+    .job-card { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 14px 16px; margin-bottom: 8px; transition: 0.15s; }
+    .job-card:hover { border-color: #58a6ff; }
+    .job-title { font-size: 15px; color: #58a6ff; text-decoration: none; font-weight: 500; }
+    .job-title:hover { text-decoration: underline; }
+    .job-meta { margin-top: 6px; font-size: 12px; color: #8b949e; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .job-repo { color: #8b949e; }
+    .label { display: inline-block; padding: 1px 7px; border-radius: 12px; font-size: 11px; border: 1px solid #30363d; color: #c9d1d9; background: #21262d; }
+
+    .repo-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+    .repo-card { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 14px 16px; }
+    .repo-card a { color: #58a6ff; text-decoration: none; font-size: 14px; font-weight: 500; }
+    .repo-card a:hover { text-decoration: underline; }
+
+    .empty { text-align: center; padding: 60px 20px; color: #484f58; }
+    .empty p { font-size: 15px; }
+
+    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #30363d; border-top-color: #58a6ff; border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 6px; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #panel-repos, #panel-jobs { display: none; }
+    #panel-jobs.active, #panel-repos.active { display: block; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><span>&#9679;</span> GitHub Jobs Aggregator</h1>
+    <div class="actions">
+      <button class="btn primary" id="btn-trigger">Fetch Jobs</button>
+      <button class="btn" id="btn-discover">Discover Repos</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="status-bar" id="status"></div>
+
+    <div class="tabs">
+      <div class="tab active" data-panel="jobs">Jobs</div>
+      <div class="tab" data-panel="repos">Repos</div>
+    </div>
+
+    <div id="panel-jobs" class="active"></div>
+    <div id="panel-repos"></div>
+  </div>
+
+  <script>
+    const $ = (s) => document.querySelector(s);
+    const status = $('#status');
+
+    function showStatus(msg, type = '') {
+      status.textContent = msg;
+      status.className = 'status-bar visible' + (type ? ' ' + type : '');
+    }
+    function hideStatus() { status.className = 'status-bar'; }
+
+    // Tabs
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('#panel-jobs, #panel-repos').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        $(`#panel-${tab.dataset.panel}`).classList.add('active');
+      });
+    });
+
+    // Load jobs
+    async function loadJobs() {
+      const panel = $('#panel-jobs');
+      try {
+        const res = await fetch('/jobs');
+        const data = await res.json();
+        const dates = Object.keys(data);
+
+        if (dates.length === 0) {
+          panel.innerHTML = '<div class="empty"><p>No jobs yet. Click "Fetch Jobs" to get started.</p></div>';
+          return;
+        }
+
+        let html = '';
+        for (const date of dates) {
+          const jobs = data[date];
+          html += `<div class="date-group">
+            <div class="date-header">${formatDate(date)}<span class="count">${jobs.length}</span></div>`;
+          for (const job of jobs) {
+            const labels = job.labels.map(l => `<span class="label">${esc(l)}</span>`).join(' ');
+            html += `<div class="job-card">
+              <a class="job-title" href="${esc(job.url)}" target="_blank">${esc(job.title)}</a>
+              <div class="job-meta">
+                <span class="job-repo">${esc(job.repo)}</span>
+                ${labels}
+              </div>
+            </div>`;
+          }
+          html += '</div>';
+        }
+        panel.innerHTML = html;
+      } catch (e) {
+        panel.innerHTML = '<div class="empty"><p>Failed to load jobs.</p></div>';
+      }
+    }
+
+    // Load repos
+    async function loadRepos() {
+      const panel = $('#panel-repos');
+      try {
+        const res = await fetch('/repos');
+        const repos = await res.json();
+        let html = '<div class="repo-list">';
+        for (const r of repos) {
+          html += `<div class="repo-card"><a href="https://github.com/${esc(r.owner)}/${esc(r.repo)}" target="_blank">${esc(r.owner)}/${esc(r.repo)}</a></div>`;
+        }
+        html += '</div>';
+        panel.innerHTML = html;
+      } catch (e) {
+        panel.innerHTML = '<div class="empty"><p>Failed to load repos.</p></div>';
+      }
+    }
+
+    // Trigger fetch
+    $('#btn-trigger').addEventListener('click', async () => {
+      const btn = $('#btn-trigger');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Fetching...';
+      showStatus('Running aggregation...');
+      try {
+        const res = await fetch('/jobs/trigger', { method: 'POST' });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showStatus(`Fetched ${data.jobsFetched} jobs at ${new Date(data.ranAt).toLocaleTimeString()}`, 'success');
+          loadJobs();
+        } else {
+          showStatus(`Error: ${data.error}`, 'error');
+        }
+      } catch (e) {
+        showStatus('Request failed.', 'error');
+      }
+      btn.disabled = false;
+      btn.textContent = 'Fetch Jobs';
+    });
+
+    // Discover repos
+    $('#btn-discover').addEventListener('click', async () => {
+      const btn = $('#btn-discover');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Discovering...';
+      showStatus('Searching for new repos via Claude...');
+      try {
+        const res = await fetch('/repos/discover', { method: 'POST' });
+        const data = await res.json();
+        if (data.error) {
+          showStatus(`Error: ${data.error}`, 'error');
+        } else {
+          const msg = data.added.length > 0
+            ? `Found ${data.added.length} new repos: ${data.added.join(', ')} (${data.total} total)`
+            : `No new repos found (${data.total} total)`;
+          showStatus(msg, 'success');
+          loadRepos();
+        }
+      } catch (e) {
+        showStatus('Request failed.', 'error');
+      }
+      btn.disabled = false;
+      btn.textContent = 'Discover Repos';
+    });
+
+    function formatDate(d) {
+      const dt = new Date(d + 'T00:00:00');
+      return dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    function esc(s) {
+      const el = document.createElement('span');
+      el.textContent = s;
+      return el.innerHTML;
+    }
+
+    // Init
+    loadJobs();
+    loadRepos();
+  </script>
+</body>
+</html>
