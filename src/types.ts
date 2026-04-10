@@ -14,3 +14,8 @@ export interface Job {
 export interface JobsByDate {
   [date: string]: Job[];
 }
+
+export interface Profile {
+  name: string;
+  email: string;
+}

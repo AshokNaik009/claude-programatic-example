@@ -54,8 +54,43 @@
     .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #30363d; border-top-color: #58a6ff; border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 6px; vertical-align: middle; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    #panel-repos, #panel-jobs { display: none; }
-    #panel-jobs.active, #panel-repos.active { display: block; }
+    #panel-repos, #panel-jobs, #panel-profile { display: none; }
+    #panel-jobs.active, #panel-repos.active, #panel-profile.active { display: block; }
+
+    /* Apply button on job card */
+    .job-actions { margin-top: 10px; display: flex; gap: 8px; }
+    .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 5px; border: 1px solid #30363d; background: #21262d; color: #c9d1d9; cursor: pointer; transition: 0.15s; }
+    .btn-sm:hover { background: #30363d; border-color: #8b949e; }
+    .btn-sm.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+    .btn-sm.primary:hover { background: #388bfd; }
+    .btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Apply panel */
+    .apply-panel { margin-top: 12px; padding: 14px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; }
+    .apply-panel.hidden { display: none; }
+    .apply-panel .loading { color: #8b949e; font-size: 13px; }
+    .apply-panel textarea { width: 100%; min-height: 200px; padding: 10px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-family: inherit; font-size: 13px; resize: vertical; }
+    .apply-panel textarea:focus { outline: none; border-color: #58a6ff; }
+    .apply-info { font-size: 12px; color: #8b949e; margin-bottom: 8px; }
+    .apply-info strong { color: #c9d1d9; }
+    .apply-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .apply-error { color: #f85149; font-size: 13px; padding: 8px 0; }
+
+    /* Profile form */
+    .profile-form { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 24px; max-width: 480px; }
+    .profile-form label { display: block; margin-bottom: 6px; font-size: 13px; color: #8b949e; }
+    .profile-form input[type="text"], .profile-form input[type="email"] { width: 100%; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px; font-family: inherit; }
+    .profile-form input[type="text"]:focus, .profile-form input[type="email"]:focus { outline: none; border-color: #58a6ff; }
+    .profile-form .field { margin-bottom: 16px; }
+    .profile-form input[type="file"] { color: #8b949e; font-size: 13px; }
+    .profile-form .hint { font-size: 12px; color: #484f58; margin-top: 4px; }
+    .profile-form .form-actions { display: flex; gap: 8px; margin-top: 20px; }
+    .profile-current { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 16px 20px; margin-bottom: 16px; }
+    .profile-current .row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }
+    .profile-current .row .label-text { color: #8b949e; }
+    .profile-current .row .value { color: #c9d1d9; }
+    .profile-current .cv-yes { color: #3fb950; }
+    .profile-current .cv-no { color: #f85149; }
   </style>
 </head>
 <body>
@@ -73,10 +108,12 @@
     <div class="tabs">
       <div class="tab active" data-panel="jobs">Jobs</div>
       <div class="tab" data-panel="repos">Repos</div>
+      <div class="tab" data-panel="profile">Profile</div>
     </div>
 
     <div id="panel-jobs" class="active"></div>
     <div id="panel-repos"></div>
+    <div id="panel-profile"></div>
   </div>
 
   <script>
@@ -93,9 +130,10 @@
     document.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', () => {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('#panel-jobs, #panel-repos').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('#panel-jobs, #panel-repos, #panel-profile').forEach(p => p.classList.remove('active'));
         tab.classList.add('active');
         $(`#panel-${tab.dataset.panel}`).classList.add('active');
+        if (tab.dataset.panel === 'profile') loadProfile();
       });
     });
 
@@ -119,12 +157,17 @@
             <div class="date-header">${formatDate(date)}<span class="count">${jobs.length}</span></div>`;
           for (const job of jobs) {
             const labels = job.labels.map(l => `<span class="label">${esc(l)}</span>`).join(' ');
-            html += `<div class="job-card">
+            const jobId = 'job-' + btoa(job.url).replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
+            html += `<div class="job-card" data-job-id="${jobId}" data-job-url="${esc(job.url)}">
               <a class="job-title" href="${esc(job.url)}" target="_blank">${esc(job.title)}</a>
               <div class="job-meta">
                 <span class="job-repo">${esc(job.repo)}</span>
                 ${labels}
               </div>
+              <div class="job-actions">
+                <button class="btn-sm primary btn-apply" data-job-id="${jobId}">Apply</button>
+              </div>
+              <div class="apply-panel hidden" id="apply-${jobId}"></div>
             </div>`;
           }
           html += '</div>';
@@ -198,6 +241,206 @@
       btn.disabled = false;
       btn.textContent = 'Discover Repos';
     });
+
+    // ===== Profile =====
+    async function loadProfile() {
+      const panel = $('#panel-profile');
+      try {
+        const res = await fetch('/profile');
+        if (res.status === 404) {
+          renderProfileForm(null);
+          return;
+        }
+        const data = await res.json();
+        renderProfileForm(data);
+      } catch (e) {
+        renderProfileForm(null);
+      }
+    }
+
+    function renderProfileForm(profile) {
+      const panel = $('#panel-profile');
+      const current = profile ? `
+        <div class="profile-current">
+          <div class="row"><span class="label-text">Name</span><span class="value">${esc(profile.name)}</span></div>
+          <div class="row"><span class="label-text">Email</span><span class="value">${esc(profile.email)}</span></div>
+          <div class="row"><span class="label-text">CV</span><span class="value ${profile.hasCV ? 'cv-yes' : 'cv-no'}">${profile.hasCV ? 'Uploaded' : 'Not uploaded'}</span></div>
+        </div>` : '';
+
+      panel.innerHTML = `
+        ${current}
+        <div class="profile-form">
+          <div class="field">
+            <label for="pf-name">Name</label>
+            <input type="text" id="pf-name" value="${profile ? esc(profile.name) : ''}" placeholder="Your name">
+          </div>
+          <div class="field">
+            <label for="pf-email">Email</label>
+            <input type="email" id="pf-email" value="${profile ? esc(profile.email) : ''}" placeholder="you@example.com">
+          </div>
+          <div class="field">
+            <label for="pf-cv">CV (PDF)</label>
+            <input type="file" id="pf-cv" accept="application/pdf">
+            <div class="hint">${profile && profile.hasCV ? 'A CV is already uploaded. Leave empty to keep the current one.' : 'Upload a PDF file (max 10MB)'}</div>
+          </div>
+          <div class="form-actions">
+            <button class="btn primary" id="btn-save-profile">${profile ? 'Update Profile' : 'Save Profile'}</button>
+            ${profile ? '<button class="btn" id="btn-delete-profile">Delete</button>' : ''}
+          </div>
+        </div>
+      `;
+
+      $('#btn-save-profile').addEventListener('click', saveProfile);
+      const delBtn = $('#btn-delete-profile');
+      if (delBtn) delBtn.addEventListener('click', deleteProfile);
+    }
+
+    async function saveProfile() {
+      const name = $('#pf-name').value.trim();
+      const email = $('#pf-email').value.trim();
+      const cvFile = $('#pf-cv').files[0];
+
+      if (!name || !email) {
+        showStatus('Name and email are required', 'error');
+        return;
+      }
+
+      const fd = new FormData();
+      fd.append('name', name);
+      fd.append('email', email);
+      if (cvFile) fd.append('cv', cvFile);
+
+      const btn = $('#btn-save-profile');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Saving...';
+      try {
+        const res = await fetch('/profile', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (res.ok) {
+          showStatus('Profile saved', 'success');
+          renderProfileForm(data);
+        } else {
+          showStatus(`Error: ${data.error}`, 'error');
+        }
+      } catch (e) {
+        showStatus('Request failed.', 'error');
+      }
+      btn.disabled = false;
+    }
+
+    async function deleteProfile() {
+      if (!confirm('Delete your profile and CV?')) return;
+      try {
+        await fetch('/profile', { method: 'DELETE' });
+        showStatus('Profile deleted', 'success');
+        renderProfileForm(null);
+      } catch (e) {
+        showStatus('Request failed.', 'error');
+      }
+    }
+
+    // ===== Apply =====
+    document.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.btn-apply');
+      if (!btn) return;
+
+      const jobId = btn.dataset.jobId;
+      const card = btn.closest('.job-card');
+      const jobUrl = card.dataset.jobUrl;
+      const panel = $(`#apply-${jobId}`);
+
+      // Toggle — if already visible with content, hide it
+      if (!panel.classList.contains('hidden') && panel.dataset.state === 'done') {
+        panel.classList.add('hidden');
+        panel.dataset.state = '';
+        panel.innerHTML = '';
+        return;
+      }
+
+      // Check profile first
+      const profRes = await fetch('/profile');
+      if (profRes.status === 404) {
+        panel.classList.remove('hidden');
+        panel.innerHTML = `<div class="apply-error">No profile found. <a href="#" id="goto-profile-${jobId}" style="color:#58a6ff;">Set up your profile</a> first.</div>`;
+        $(`#goto-profile-${jobId}`).addEventListener('click', (ev) => {
+          ev.preventDefault();
+          document.querySelector('.tab[data-panel="profile"]').click();
+        });
+        return;
+      }
+      const profile = await profRes.json();
+      if (!profile.hasCV) {
+        panel.classList.remove('hidden');
+        panel.innerHTML = `<div class="apply-error">No CV uploaded. <a href="#" id="goto-profile-${jobId}" style="color:#58a6ff;">Upload your CV</a> first.</div>`;
+        $(`#goto-profile-${jobId}`).addEventListener('click', (ev) => {
+          ev.preventDefault();
+          document.querySelector('.tab[data-panel="profile"]').click();
+        });
+        return;
+      }
+
+      // Show loading
+      panel.classList.remove('hidden');
+      panel.dataset.state = 'loading';
+      panel.innerHTML = '<div class="loading"><span class="spinner"></span>Generating personalized cover letter via Claude... this may take up to 2 minutes.</div>';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jobUrl }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          panel.innerHTML = `<div class="apply-error">Error: ${esc(data.error)}</div>`;
+          panel.dataset.state = 'error';
+          btn.disabled = false;
+          return;
+        }
+
+        renderApplyPanel(panel, data, jobUrl, profile);
+        panel.dataset.state = 'done';
+      } catch (err) {
+        panel.innerHTML = `<div class="apply-error">Request failed.</div>`;
+        panel.dataset.state = 'error';
+      }
+      btn.disabled = false;
+    });
+
+    function renderApplyPanel(panel, data, jobUrl, profile) {
+      const emailInfo = data.email
+        ? `<div class="apply-info">Contact email: <strong>${esc(data.email)}</strong></div>`
+        : `<div class="apply-info">No contact email found in posting. Use copy-to-clipboard and paste into the GitHub issue.</div>`;
+
+      const textareaId = 'cl-' + Math.random().toString(36).slice(2, 8);
+
+      panel.innerHTML = `
+        ${emailInfo}
+        <textarea id="${textareaId}">${esc(data.coverLetter)}</textarea>
+        <div class="apply-actions">
+          ${data.email ? `<button class="btn-sm primary" data-action="mailto">Open Email</button>` : ''}
+          <button class="btn-sm" data-action="copy">Copy to Clipboard</button>
+          <a class="btn-sm" href="${esc(jobUrl)}" target="_blank" style="text-decoration:none;display:inline-block;">Open Issue</a>
+        </div>
+      `;
+
+      panel.querySelectorAll('[data-action]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const textarea = $('#' + textareaId);
+          const body = textarea.value;
+          if (btn.dataset.action === 'mailto') {
+            const mailto = `mailto:${encodeURIComponent(data.email)}?subject=${encodeURIComponent(data.subject)}&body=${encodeURIComponent(body)}`;
+            window.location.href = mailto;
+          } else if (btn.dataset.action === 'copy') {
+            navigator.clipboard.writeText(body).then(() => {
+              showStatus('Cover letter copied to clipboard', 'success');
+            });
+          }
+        });
+      });
+    }
 
     function formatDate(d) {
       const dt = new Date(d + 'T00:00:00');
